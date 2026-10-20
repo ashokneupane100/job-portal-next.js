@@ -11,3 +11,14 @@ export const users = mysqlTable("users", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 });
+
+
+export const sessions=mysqlTable("sessions",{
+  id:varchar("id",{length:255}).primaryKey(),
+  userId:int('user_id').notNull().references(()=>users.id,{onDelete:'cascade'}),
+  userAgent:text('user_agent').notNull(),
+  ip:varchar('ip,{length:255').notNull(),
+  expiresAt:timestamp('expires_at').notNull(),
+ createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+})
