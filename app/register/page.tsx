@@ -19,12 +19,13 @@ import {
 import { Eye, EyeOff, Lock, Mail, User, UserCheck } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import {registrationAction} from "./registrationAction.action";
+import { registrationAction } from "./registrationAction.action";
 
 interface RegistrationFormData {
   name: string;
   userName: string;
   email: string;
+  phoneNumber: string;
   password: string;
   confirmPassword: string;
   role: "applicant" | "employer";
@@ -35,6 +36,7 @@ const Registration: React.FC = () => {
     name: "",
     userName: "",
     email: "",
+    phoneNumber: "",
     password: "",
     confirmPassword: "",
     role: "applicant",
@@ -42,19 +44,56 @@ const Registration: React.FC = () => {
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{
+    userName?: string;
+    email?: string;
+  }>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleInputChange = (name: string, value: string) => {
     setFormData((prev) => ({
       ...prev,
       [name]: value,
     }));
+    if (name === "userName" || name === "email") {
+      setFieldErrors((prev) => ({ ...prev, [name]: undefined }));
+    }
   };
 
- 
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setFieldErrors({});
 
-  const handleSubmit = (e: FormEvent) => {
+    if (formData.password !== formData.confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    const registrationData = {
+      name: formData.name.trim(),
+      userName: formData.userName.trim(),
+      email: formData.email.toLowerCase().trim(),
+      phoneNumber: formData.phoneNumber.trim(),
+      password: formData.password,
+      role: formData.role,
+    };
+
+    setIsSubmitting(true);
     try {
-    } catch (error) {}
+      const result = await registrationAction(registrationData);
+
+      if (!result.success && result.field) {
+        setFieldErrors({ [result.field]: result.message });
+      } else if (!result.success) {
+        setError(result.message ?? "Registration failed.");
+      }
+    } catch {
+      setError("Registration failed. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -69,7 +108,7 @@ const Registration: React.FC = () => {
         </CardHeader>
 
         <CardContent>
-          <form action={registrationAction}  className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
             {/* Name Field */}
             <div className="space-y-2">
               <Label htmlFor="name">Full Name *</Label>
@@ -105,9 +144,17 @@ const Registration: React.FC = () => {
                   onChange={(e: ChangeEvent<HTMLInputElement>) =>
                     handleInputChange("userName", e.target.value)
                   }
-                  className={`pl-10 `}
+                  aria-invalid={!!fieldErrors.userName}
+                  className={`pl-10 ${
+                    fieldErrors.userName ? "border-destructive" : ""
+                  }`}
                 />
               </div>
+              {fieldErrors.userName && (
+                <p className="text-sm text-destructive" role="alert">
+                  {fieldErrors.userName}
+                </p>
+              )}
             </div>
 
             {/* Email Field */}
@@ -125,9 +172,34 @@ const Registration: React.FC = () => {
                   onChange={(e: ChangeEvent<HTMLInputElement>) =>
                     handleInputChange("email", e.target.value)
                   }
-                  className={`pl-10 `}
+                  aria-invalid={!!fieldErrors.email}
+                  className={`pl-10 ${
+                    fieldErrors.email ? "border-destructive" : ""
+                  }`}
                 />
               </div>
+              {fieldErrors.email && (
+                <p className="text-sm text-destructive" role="alert">
+                  {fieldErrors.email}
+                </p>
+              )}
+            </div>
+
+            {/* Phone Number Field */}
+            <div className="space-y-2">
+              <Label htmlFor="phoneNumber">Phone Number *</Label>
+              <Input
+                id="phoneNumber"
+                type="tel"
+                name="phoneNumber"
+                placeholder="Enter your phone number"
+                maxLength={18}
+                required
+                value={formData.phoneNumber}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  handleInputChange("phoneNumber", e.target.value)
+                }
+              />
             </div>
 
             {/* Role Selection */}
@@ -136,9 +208,9 @@ const Registration: React.FC = () => {
               <Select
                 value={formData.role}
                 name="role"
-                onValueChange={(value: "applicant" | "employer") =>
-                  handleInputChange("role", value)
-                }
+                onValueChange={(value) => {
+                  if (value) handleInputChange("role", value);
+                }}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select your role" />
@@ -218,9 +290,15 @@ const Registration: React.FC = () => {
             </div>
 
             {/* Submit Button */}
-            <Button type="submit" className="w-full">
-              Create Account
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? "Creating Account..." : "Create Account"}
             </Button>
+
+            {error && (
+              <p className="text-sm text-destructive text-center" role="alert">
+                {error}
+              </p>
+            )}
 
             <div className="text-center">
               <p className="text-sm text-muted-foreground">
