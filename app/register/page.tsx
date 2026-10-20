@@ -1,242 +1,243 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { ChangeEvent, FormEvent, useState } from "react";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Eye, EyeOff, Lock, Mail, User, UserCheck } from "lucide-react";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { User, Mail, Lock, Eye, EyeOff } from "lucide-react";
-import Link from "next/link";
-
-const ROLES = [
-  { label: "Job Applicant", value: "job_applicant" },
-  { label: "Employer", value: "employer" },
-];
+import {registrationAction} from "./registrationAction.action";
 
 interface RegistrationFormData {
-  fullName: string;
+  name: string;
   userName: string;
   email: string;
-  role: string;
   password: string;
   confirmPassword: string;
+  role: "applicant" | "employer";
 }
 
-export default function RegisterPage() {
+const Registration: React.FC = () => {
   const [formData, setFormData] = useState<RegistrationFormData>({
-    fullName: "",
+    name: "",
     userName: "",
     email: "",
-    role: "job_applicant",
     password: "",
     confirmPassword: "",
+    role: "applicant",
   });
-  console.log(formData)
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+  const handleInputChange = (name: string, value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // TODO: Implement registration logic (e.g., call auth API)
-    console.log("Registering:", formData);
+ 
+
+  const handleSubmit = (e: FormEvent) => {
+    try {
+    } catch (error) {}
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="w-full max-w-md space-y-8">
-        <div className="flex flex-col items-center text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary">
-            <User className="h-7 w-7 text-white" />
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          <div className="mx-auto w-16 h-16 bg-primary rounded-full flex items-center justify-center mb-4">
+            <UserCheck className="w-8 h-8 text-primary-foreground" />
           </div>
-          <h2 className="mt-6 text-2xl font-semibold tracking-tight">
-            Join Our Job Portal
-          </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Create your account to get started
-          </p>
-        </div>
+          <CardTitle className="text-2xl">Join Our Job Portal</CardTitle>
+          <CardDescription>Create your account to get started</CardDescription>
+        </CardHeader>
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="fullName">
-              Full Name <span className="text-destructive ml-0.5">*</span>
-            </Label>
-            <div className="relative">
-              <Input
-                id="fullName"
-                name="fullName"
-                type="text"
-                placeholder="Enter your full name"
-                value={formData.fullName}
-                onChange={handleInputChange}
-                required
-                className="pl-10"
-              />
-              <User
-                className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
-              />
+        <CardContent>
+          <form action={registrationAction}  className="space-y-6">
+            {/* Name Field */}
+            <div className="space-y-2">
+              <Label htmlFor="name">Full Name *</Label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="name"
+                  type="text"
+                  name="name"
+                  placeholder="Enter your full name"
+                  required
+                  value={formData.name}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    handleInputChange("name", e.target.value)
+                  }
+                  className={`pl-10 `}
+                />
+              </div>
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="userName">
-              Username <span className="text-destructive ml-0.5">*</span>
-            </Label>
-            <div className="relative">
-              <Input
-                id="userName"
-                name="userName"
-                type="text"
-                placeholder="Choose a username"
-                value={formData.userName}
-                onChange={handleInputChange}
-                required
-                className="pl-10"
-              />
-              <User
-                className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
-              />
+            {/* Username Field */}
+            <div className="space-y-2">
+              <Label htmlFor="userName">Username *</Label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="userName"
+                  type="text"
+                  name="userName"
+                  placeholder="Choose a username"
+                  required
+                  value={formData.userName}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    handleInputChange("userName", e.target.value)
+                  }
+                  className={`pl-10 `}
+                />
+              </div>
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="email">
-              Email Address <span className="text-destructive ml-0.5">*</span>
-            </Label>
-            <div className="relative">
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="Enter your email"
-                value={formData.email}
-                onChange={handleInputChange}
-                required
-                className="pl-10"
-              />
-              <Mail
-                className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
-              />
+            {/* Email Field */}
+            <div className="space-y-2">
+              <Label htmlFor="email">Email Address *</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="email"
+                  type="email"
+                  name="email"
+                  placeholder="Enter your email"
+                  required
+                  value={formData.email}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    handleInputChange("email", e.target.value)
+                  }
+                  className={`pl-10 `}
+                />
+              </div>
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="role">
-              I am a <span className="text-destructive ml-0.5">*</span>
-            </Label>
-            <Select
-              defaultValue="job_applicant"
-              onValueChange={(value) =>
-                setFormData((prev) => ({ ...prev, role: value ?? "job_applicant" }))
-              }
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Job Applicant" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  {ROLES.map((role) => (
-                    <SelectItem key={role.value} value={role.value}>
-                      {role.label}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </div>
+            {/* Role Selection */}
+            <div className="space-y-2 w-full">
+              <Label htmlFor="role">I am a *</Label>
+              <Select
+                value={formData.role}
+                name="role"
+                onValueChange={(value: "applicant" | "employer") =>
+                  handleInputChange("role", value)
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select your role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="applicant">Job Applicant</SelectItem>
+                  <SelectItem value="employer">Employer</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-          <div className="space-y-2 relative">
-            <Label htmlFor="password">
-              Password <span className="text-destructive ml-0.5">*</span>
-            </Label>
-            <Input
-              id="password"
-              name="password"
-              type={showPassword ? "text" : "password"}
-              placeholder="Create a strong password"
-              value={formData.password}
-              onChange={handleInputChange}
-              required
-              className="pl-10 pr-10"
-            />
-            <Lock
-              className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword((prev) => !prev)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              aria-label="Toggle password visibility"
-            >
-              {showPassword ? (
-                <EyeOff className="h-4 w-4" />
-              ) : (
-                <Eye className="h-4 w-4" />
-              )}
-            </button>
-          </div>
+            {/* Password Field */}
+            <div className="space-y-2">
+              <Label htmlFor="password">Password *</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Create a strong password"
+                  required
+                  value={formData.password}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    handleInputChange("password", e.target.value)
+                  }
+                  className={`pl-10 pr-10 `}
+                />
 
-          <div className="space-y-2 relative">
-            <Label htmlFor="confirmPassword">
-              Confirm Password <span className="text-destructive ml-0.5">*</span>
-            </Label>
-            <Input
-              id="confirmPassword"
-              name="confirmPassword"
-              type={showConfirmPassword ? "text" : "password"}
-              placeholder="Confirm your password"
-              value={formData.confirmPassword}
-              onChange={handleInputChange}
-              required
-              className="pl-10 pr-10"
-            />
-            <Lock
-              className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
-            />
-            <button
-              type="button"
-              onClick={() => setShowConfirmPassword((prev) => !prev)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              aria-label="Toggle confirm password visibility"
-            >
-              {showConfirmPassword ? (
-                <EyeOff className="h-4 w-4" />
-              ) : (
-                <Eye className="h-4 w-4" />
-              )}
-            </button>
-          </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4 text-muted-foreground" />
+                  ) : (
+                    <Eye className="w-4 h-4 text-muted-foreground" />
+                  )}
+                </Button>
+              </div>
+            </div>
 
-          <Button type="submit" className="w-full">
-            Create Account
-          </Button>
-        </form>
+            {/* Confirm Password Field */}
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirm Password *</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type={showConfirmPassword ? "text" : "password"}
+                  placeholder="Confirm your password"
+                  required
+                  value={formData.confirmPassword}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    handleInputChange("confirmPassword", e.target.value)
+                  }
+                  className={`pl-10 pr-10 `}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff className="w-4 h-4 text-muted-foreground" />
+                  ) : (
+                    <Eye className="w-4 h-4 text-muted-foreground" />
+                  )}
+                </Button>
+              </div>
+            </div>
 
-        <p className="text-center text-sm text-muted-foreground">
-          Already have an account?{" "}
-          <Link
-            href="/"
-            className="text-primary font-medium underline underline-offset-4 hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          >
-            Sign in here
-          </Link>
-        </p>
-      </div>
+            {/* Submit Button */}
+            <Button type="submit" className="w-full">
+              Create Account
+            </Button>
+
+            <div className="text-center">
+              <p className="text-sm text-muted-foreground">
+                Already have an account?{" "}
+                <a
+                  href="#"
+                  className="text-primary hover:text-primary/80 font-medium underline-offset-4 hover:underline"
+                >
+                  Sign in here
+                </a>
+              </p>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
-}
+};
+
+export default Registration;
