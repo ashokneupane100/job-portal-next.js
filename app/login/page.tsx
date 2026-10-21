@@ -17,7 +17,6 @@ export default function LoginPage() {
     email: "",
     password: "",
   });
-  console.log(formData);
 
   const [showPassword, setShowPassword] = useState(false);
 
@@ -42,10 +41,10 @@ export default function LoginPage() {
             <User className="h-7 w-7 text-white" />
           </div>
           <h2 className="mt-6 text-2xl font-semibold tracking-tight">
-            Join Our Job Portal
+            Welcome Back
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Create your account to get started
+            Sign in to access your account
           </p>
         </div>
 
@@ -107,12 +106,9 @@ export default function LoginPage() {
           Don&apos;t have an account?{" "}
           <Link
             href="/register"
-            className="text-primary font-medium underline underline-offset-4 hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 text-center"
+            className="text-primary font-medium underline underline-offset-4 hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-           <p>Click on register</p> 
-           <p>
-            and create account
-            </p>
+            Register here
           </Link>
         </p>
       </div>

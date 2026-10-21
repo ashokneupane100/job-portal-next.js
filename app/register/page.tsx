@@ -19,6 +19,7 @@ import {
 import { Eye, EyeOff, Lock, Mail, User, UserCheck } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
 import { registrationAction } from "./registrationAction.action";
 
 interface RegistrationFormData {
@@ -303,12 +304,12 @@ const Registration: React.FC = () => {
             <div className="text-center">
               <p className="text-sm text-muted-foreground">
                 Already have an account?{" "}
-                <a
-                  href="#"
+                <Link
+                  href="/login"
                   className="text-primary hover:text-primary/80 font-medium underline-offset-4 hover:underline"
                 >
                   Sign in here
-                </a>
+                </Link>
               </p>
             </div>
           </form>

@@ -1,8 +1,19 @@
-import mysql from "mysql2";
-import { drizzle } from "drizzle-orm/mysql2";
+import postgres from "postgres";
+import { drizzle } from "drizzle-orm/postgres-js";
 
-const pool = mysql.createPool({
-  uri: process.env.DATABASE_URL as string,
-});
+const connectionString = process.env.DATABASE_URL!;
 
-export const db = drizzle({ client: pool });
+const globalForDb = globalThis as unknown as {
+  conn: postgres.Sql | undefined;
+};
+
+const client = globalForDb.conn ?? postgres(connectionString);
+
+if (process.env.NODE_ENV !== "production") {
+  globalForDb.conn = client;
+}
+
+export const db = drizzle({ client });
+
+
+
