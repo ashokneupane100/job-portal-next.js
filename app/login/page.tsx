@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { User, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { toast } from "sonner";
 import Link from "next/link";
 import { loginAction } from "./loginAction.action";
 
@@ -45,14 +46,22 @@ export default function LoginPage() {
       });
 
       if (!result.success) {
-        setError(result.message ?? "Invalid email or password.");
+        const message = result.message ?? "Invalid email or password.";
+        setError(message);
+        toast.error("Sign in failed", { description: message });
         return;
       }
+
+      toast.success("Welcome back!", {
+        description: "You have signed in successfully.",
+      });
 
       router.push("/");
       router.refresh();
     } catch {
-      setError("Login failed. Please try again.");
+      const message = "Login failed. Please try again.";
+      setError(message);
+      toast.error("Sign in failed", { description: message });
     } finally {
       setIsSubmitting(false);
     }

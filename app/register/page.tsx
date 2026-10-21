@@ -22,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { registrationAction } from "./registrationAction.action";
+import { toast } from "sonner";
 
 interface RegistrationFormData {
   name: string;
@@ -70,7 +71,11 @@ const Registration: React.FC = () => {
     setFieldErrors({});
 
     if (formData.password !== formData.confirmPassword) {
-      setError("Passwords do not match.");
+      const message = "Passwords do not match.";
+      setError(message);
+      toast.error("Passwords do not match", {
+        description: "Please make sure both password fields are identical.",
+      });
       return;
     }
 
@@ -88,18 +93,30 @@ const Registration: React.FC = () => {
       const result = await registrationAction(registrationData);
 
       if (result.success) {
-        router.push("/");
+        toast.success("Account created successfully!", {
+          description: "Please sign in with your new account.",
+        });
+        router.push("/login");
         router.refresh();
         return;
       }
 
       if (result.field) {
         setFieldErrors({ [result.field]: result.message });
-      } else {
-        setError(result.message ?? "Registration failed.");
+        toast.error(
+          result.field === "email" ? "Email already in use" : "Username taken",
+          { description: result.message },
+        );
+        return;
       }
+
+      const message = result.message ?? "Registration failed.";
+      setError(message);
+      toast.error("Registration failed", { description: message });
     } catch {
-      setError("Registration failed. Please try again.");
+      const message = "Registration failed. Please try again.";
+      setError(message);
+      toast.error("Registration failed", { description: message });
     } finally {
       setIsSubmitting(false);
     }
