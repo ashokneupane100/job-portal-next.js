@@ -30,3 +30,5 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     </html>
   );
 }
+
+//toast sonner used ... 
