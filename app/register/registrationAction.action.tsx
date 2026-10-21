@@ -1,8 +1,10 @@
 "use server";
 
 import bcrypt from "bcryptjs";
+import { headers } from "next/headers";
 import { db } from "@/config/db";
 import { users } from "@/drizzle/schema";
+import { createSession } from "@/lib/auth";
 
 interface RegistrationData {
   name: string;
@@ -70,14 +72,28 @@ export const registrationAction = async (
     // from the database, which is exactly what we want.
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    await db.insert(users).values({
-      name,
-      userName,
-      email,
-      phoneNumber,
-      password: hashedPassword,
-      role,
+    const [newUser] = await db
+      .insert(users)
+      .values({
+        name,
+        userName,
+        email,
+        phoneNumber,
+        password: hashedPassword,
+        role,
+      })
+      .returning({ id: users.id });
+
+    // Sign the new user in right away so a session row exists immediately.
+    const headerList = await headers();
+    await createSession(newUser.id, {
+      userAgent: headerList.get("user-agent") ?? "unknown",
+      ip:
+        headerList.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+        headerList.get("x-real-ip") ??
+        "unknown",
     });
+
     return { success: true };
   } catch (err) {
     const duplicateField = getDuplicateField(err);
@@ -105,5 +121,3 @@ export const registrationAction = async (
     };
   }
 };
-
-// doing better validation 

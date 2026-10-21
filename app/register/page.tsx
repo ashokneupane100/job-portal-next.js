@@ -88,7 +88,7 @@ const Registration: React.FC = () => {
       const result = await registrationAction(registrationData);
 
       if (result.success) {
-        router.push("/login");
+        router.push("/");
         router.refresh();
         return;
       }
