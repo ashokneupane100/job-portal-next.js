@@ -121,3 +121,6 @@ export const registrationAction = async (
     };
   }
 };
+
+
+// duplicate field error fixed ....
