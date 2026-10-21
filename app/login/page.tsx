@@ -155,3 +155,6 @@ export default function LoginPage() {
     </div>
   );
 }
+
+
+//removed bcrypt.js and argon2.js and added argon2 to package.json
