@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { User, Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
-import { loginAction } from "./loginAction.action";
+import { loginUserAction } from "@/features/auth/server/auth.actions";
 
 interface LoginFormData {
   email: string;
@@ -40,19 +40,19 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      const result = await loginAction({
-        email: formData.email,
+      const result = await loginUserAction({
+        email: formData.email.trim().toLowerCase(),
         password: formData.password,
       });
 
-      if (!result.success) {
+      if (result.status === "ERROR") {
         const message = result.message ?? "Invalid email or password.";
         setError(message);
         toast.error("Sign in failed", { description: message });
         return;
       }
 
-      toast.success("Welcome back!", {
+      toast.success("Welcome To Job Sewa Nepal!", {
         description: "You have signed in successfully.",
       });
 
