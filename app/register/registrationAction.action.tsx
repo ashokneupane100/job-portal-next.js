@@ -65,6 +65,9 @@ export const registrationAction = async (
   const { name, userName, email, phoneNumber, password, role } = data;
 
   try {
+    // Passwords are hashed with bcrypt (one-way, salted) before insert.
+    // Hashing is not encryption: the original password can never be recovered
+    // from the database, which is exactly what we want.
     const hashedPassword = await bcrypt.hash(password, 10);
 
     await db.insert(users).values({
