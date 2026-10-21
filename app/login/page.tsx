@@ -1,11 +1,13 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { User, Mail, Lock, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
+import { loginAction } from "./loginAction.action";
 
 interface LoginFormData {
   email: string;
@@ -13,24 +15,47 @@ interface LoginFormData {
 }
 
 export default function LoginPage() {
+  const router = useRouter();
   const [formData, setFormData] = useState<LoginFormData>({
     email: "",
     password: "",
   });
 
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    if (error) setError(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Implement registration logic (e.g., call auth API)
-    console.log("Registering:", formData);
+    setError(null);
+    setIsSubmitting(true);
+
+    try {
+      const result = await loginAction({
+        email: formData.email,
+        password: formData.password,
+      });
+
+      if (!result.success) {
+        setError(result.message ?? "Invalid email or password.");
+        return;
+      }
+
+      router.push("/");
+      router.refresh();
+    } catch {
+      setError("Login failed. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -97,9 +122,15 @@ export default function LoginPage() {
             </button>
           </div>
 
-          <Button type="submit" className="w-full">
-            Login
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? "Signing in..." : "Login"}
           </Button>
+
+          {error && (
+            <p className="text-sm text-destructive text-center" role="alert">
+              {error}
+            </p>
+          )}
         </form>
 
         <p className="text-center text-sm text-muted-foreground">

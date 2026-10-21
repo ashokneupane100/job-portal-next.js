@@ -1,6 +1,7 @@
 "use client";
 
 import React, { ChangeEvent, FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -33,6 +34,7 @@ interface RegistrationFormData {
 }
 
 const Registration: React.FC = () => {
+  const router = useRouter();
   const [formData, setFormData] = useState<RegistrationFormData>({
     name: "",
     userName: "",
@@ -85,9 +87,15 @@ const Registration: React.FC = () => {
     try {
       const result = await registrationAction(registrationData);
 
-      if (!result.success && result.field) {
+      if (result.success) {
+        router.push("/login");
+        router.refresh();
+        return;
+      }
+
+      if (result.field) {
         setFieldErrors({ [result.field]: result.message });
-      } else if (!result.success) {
+      } else {
         setError(result.message ?? "Registration failed.");
       }
     } catch {
