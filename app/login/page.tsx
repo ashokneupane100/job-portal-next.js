@@ -1,13 +1,22 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { ChangeEvent, FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Eye, EyeOff, Lock, Mail, UserCheck } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { User, Mail, Lock, Eye, EyeOff } from "lucide-react";
-import { toast } from "sonner";
 import Link from "next/link";
+import { toast } from "sonner";
+
+import { loginUserSchema } from "@/features/auth/auth.schema";
 import { loginUserAction } from "@/features/auth/server/auth.actions";
 
 interface LoginFormData {
@@ -15,7 +24,7 @@ interface LoginFormData {
   password: string;
 }
 
-export default function LoginPage() {
+const LoginForm: React.FC = () => {
   const router = useRouter();
   const [formData, setFormData] = useState<LoginFormData>({
     email: "",
@@ -26,29 +35,36 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
-  ) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+  const handleInputChange = (name: string, value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
     if (error) setError(null);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-    setIsSubmitting(true);
 
+    // 👉 Validate with the same Zod schema the Server Action uses, so the user
+    // gets instant feedback without a round trip to the server.
+    const parsed = loginUserSchema.safeParse(formData);
+
+    if (!parsed.success) {
+      const message = parsed.error.issues[0].message;
+      setError(message);
+      toast.error("Sign in failed", { description: message });
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
-      const result = await loginUserAction({
-        email: formData.email.trim().toLowerCase(),
-        password: formData.password,
-      });
+      const result = await loginUserAction(parsed.data);
 
       if (result.status === "ERROR") {
-        const message = result.message ?? "Invalid email or password.";
-        setError(message);
-        toast.error("Sign in failed", { description: message });
+        setError(result.message);
+        toast.error("Sign in failed", { description: result.message });
         return;
       }
 
@@ -68,93 +84,102 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="w-full max-w-md space-y-8">
-        <div className="flex flex-col items-center text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary">
-            <User className="h-7 w-7 text-white" />
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          <div className="mx-auto w-16 h-16 bg-primary rounded-full flex items-center justify-center mb-4">
+            <UserCheck className="w-8 h-8 text-primary-foreground" />
           </div>
-          <h2 className="mt-6 text-2xl font-semibold tracking-tight">
-            Welcome Back
-          </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Sign in to access your account
-          </p>
-        </div>
+          <CardTitle className="text-2xl">Welcome Back</CardTitle>
+          <CardDescription>Sign in to access your account</CardDescription>
+        </CardHeader>
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="email">
-              Email Address <span className="text-destructive ml-0.5">*</span>
-            </Label>
-            <div className="relative">
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="Enter your email"
-                value={formData.email}
-                onChange={handleInputChange}
-                required
-                className="pl-10"
-              />
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Email Field */}
+            <div className="space-y-2">
+              <Label htmlFor="email">Email Address *</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="Enter your email"
+                  required
+                  value={formData.email}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    handleInputChange("email", e.target.value)
+                  }
+                  className={`pl-10 `}
+                />
+              </div>
             </div>
-          </div>
 
-          <div className="space-y-2 relative">
-            <Label htmlFor="password">
-              Password <span className="text-destructive ml-0.5">*</span>
-            </Label>
-            <Input
-              id="password"
-              name="password"
-              type={showPassword ? "text" : "password"}
-              placeholder="Create a strong password"
-              value={formData.password}
-              onChange={handleInputChange}
-              required
-              className="pl-10 pr-10"
-            />
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <button
-              type="button"
-              onClick={() => setShowPassword((prev) => !prev)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              aria-label="Toggle password visibility"
-            >
-              {showPassword ? (
-                <EyeOff className="h-4 w-4" />
-              ) : (
-                <Eye className="h-4 w-4" />
-              )}
-            </button>
-          </div>
+            {/* Password Field */}
+            <div className="space-y-2">
+              <Label htmlFor="password">Password *</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  placeholder="Enter your password"
+                  required
+                  value={formData.password}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    handleInputChange("password", e.target.value)
+                  }
+                  className={`pl-10 pr-10 `}
+                />
 
-          <Button type="submit" className="w-full" disabled={isSubmitting}>
-            {isSubmitting ? "Signing in..." : "Login"}
-          </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label="Toggle password visibility"
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4 text-muted-foreground" />
+                  ) : (
+                    <Eye className="w-4 h-4 text-muted-foreground" />
+                  )}
+                </Button>
+              </div>
+            </div>
 
-          {error && (
-            <p className="text-sm text-destructive text-center" role="alert">
-              {error}
-            </p>
-          )}
-        </form>
+            {/* Submit Button */}
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? "Signing in..." : "Login"}
+            </Button>
 
-        <p className="text-center text-sm text-muted-foreground">
-          Don&apos;t have an account?{" "}
-          <Link
-            href="/register"
-            className="text-primary font-medium underline underline-offset-4 hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          >
-            Register here
-          </Link>
-        </p>
-      </div>
+            {error && (
+              <p className="text-sm text-destructive text-center" role="alert">
+                {error}
+              </p>
+            )}
+
+            <div className="text-center">
+              <p className="text-sm text-muted-foreground">
+                Don&apos;t have an account?{" "}
+                <Link
+                  href="/register"
+                  className="text-primary hover:text-primary/80 font-medium underline-offset-4 hover:underline"
+                >
+                  Register here
+                </Link>
+              </p>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
-}
+};
 
-
-//removed bcrypt.js and argon2.js and added argon2 to package.json
+export default LoginForm;
