@@ -1,6 +1,6 @@
 "use client";
 
-import React, { ChangeEvent, FormEvent, useState } from "react";
+import React, { useState } from "react";
 import { Input } from "@/components/ui/input";
 import {
   Card,
@@ -18,12 +18,13 @@ import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LoginUserData, loginUserSchema } from "@/features/auth/auth.schema";
+import { useRouter } from "next/navigation";
 
 const LoginForm: React.FC = () => {
+  const router = useRouter();
   const {
     register,
     handleSubmit,
-    watch,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(loginUserSchema),
@@ -35,9 +36,18 @@ const LoginForm: React.FC = () => {
     try {
       const result = await loginUserAction(data);
 
-      if (result.status === "SUCCESS") toast.success(result.message);
-      else toast.error(result.message);
-    } catch (error) {}
+      if (result.status === "SUCCESS") {
+        toast.success(result.message);
+        // The server action created the session row + cookie, so we are in.
+        router.push("/");
+        router.refresh();
+      } else {
+        toast.error(result.message);
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Something went wrong. Please try again.");
+    }
   };
 
   return (
@@ -115,17 +125,17 @@ const LoginForm: React.FC = () => {
 
             {/* Submit Button */}
             <Button type="submit" className="w-full">
-              Create Account
+              Sign In
             </Button>
 
             <div className="text-center">
               <p className="text-sm text-muted-foreground">
-                Already have an account?
+                Don&apos;t have an account?
                 <Link
                   href="/register"
                   className="text-primary hover:text-primary/80 font-medium underline-offset-4 hover:underline"
                 >
-                  Sign in here
+                  Create one here
                 </Link>
               </p>
             </div>

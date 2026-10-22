@@ -3,9 +3,12 @@ import crypto from "crypto";
 import { getIPAddress } from "./location";
 import { sessions, users } from "@/drizzle/schema";
 import { db } from "@/config/db";
-import { SESSION_LIFETIME } from "@/config/constant";
+import {
+  SESSION_COOKIE_NAME,
+  SESSION_LIFETIME,
+  SESSION_REFRESH_TIME,
+} from "@/config/constant";
 import { eq } from "drizzle-orm";
-import { redirect } from "next/navigation";
 
 type CreateSessionData = {
   userAgent: string;
@@ -19,7 +22,13 @@ const generateSessionToken = () => {
   return crypto.randomBytes(32).toString("hex").normalize();
 };
 
-
+/**
+ * Only the SHA-256 hash of the token is stored in the database, so a leaked
+ * database dump cannot be replayed as a login. The raw token only ever lives
+ * in the user's cookie.
+ */
+const hashSessionToken = (token: string) =>
+  crypto.createHash("sha-256").update(token).digest("hex");
 
 const createUserSession = async ({
   token,
@@ -28,20 +37,26 @@ const createUserSession = async ({
   ip,
   tx = db,
 }: CreateSessionData) => {
-  const hashedToken = crypto.createHash("sha-256").update(token).digest("hex");
+  const hashedToken = hashSessionToken(token);
 
-  const [session] = await tx.insert(sessions).values({
-    id: hashedToken,
-    userId,
-    expiresAt: new Date(Date.now() + SESSION_LIFETIME * 1000),
-    ip,
-    userAgent,
-  });
+  // `.returning()` gives us the row that was just written. Without it
+  // PostgreSQL has nothing to hand back (this is the `insertId` API from
+  // MySQL — it does not exist in the Postgres driver).
+  const [session] = await tx
+    .insert(sessions)
+    .values({
+      id: hashedToken,
+      userId,
+      expiresAt: new Date(Date.now() + SESSION_LIFETIME * 1000),
+      ip,
+      userAgent,
+    })
+    .returning();
 
   return session;
 };
 
-// Give me the type of the first parameter of the callback inside db.transaction — that's the tx object
+// The `tx` handed to us by `db.transaction(...)`, or the plain `db` instance.
 type DbClient = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export const createSessionAndSetCookies = async (
@@ -62,18 +77,21 @@ export const createSessionAndSetCookies = async (
 
   const cookieStore = await cookies();
 
-  cookieStore.set("session", token, {
-    secure: true,
+  cookieStore.set(SESSION_COOKIE_NAME, token, {
+    // `secure: true` would stop the browser from storing the cookie on a
+    // plain-http `http://localhost` dev server, so only enable it in production.
+    secure: process.env.NODE_ENV === "production",
     httpOnly: true,
+    sameSite: "lax",
+    path: "/",
     maxAge: SESSION_LIFETIME,
   });
+
+  return token;
 };
 
 export const validateSessionAndGetUser = async (session: string) => {
-  const hashedToken = crypto
-    .createHash("sha-256")
-    .update(session)
-    .digest("hex");
+  const hashedToken = hashSessionToken(session);
 
   const [user] = await db
     .select({
@@ -89,24 +107,24 @@ export const validateSessionAndGetUser = async (session: string) => {
       role: users.role,
       phoneNumber: users.phoneNumber,
       email: users.email,
-      // emailVerifiedAt: users.emailVerifiedAt,
       avatarUrl: users.avatarUrl,
       createdAt: users.createdAt,
       updatedAt: users.updatedAt,
     })
     .from(sessions)
-    .where(eq(sessions.id, hashedToken))
-    .innerJoin(users, eq(users.id, sessions.userId));
+    .innerJoin(users, eq(users.id, sessions.userId))
+    .where(eq(sessions.id, hashedToken));
 
   if (!user) return null;
 
-  // 2:
+  // 2: the session row is gone or the token does not match any user.
   if (Date.now() >= user.session.expiresAt.getTime()) {
     await invalidateSession(user.session.id);
     return null;
   }
-  // console.log(expiresAt.getTime()); // 1764562512000
 
+  // 3: the session is close to expiring — slide the window forward so an
+  // active user is never logged out mid-session.
   if (
     Date.now() >=
     user.session.expiresAt.getTime() - SESSION_REFRESH_TIME * 1000
@@ -118,9 +136,29 @@ export const validateSessionAndGetUser = async (session: string) => {
       })
       .where(eq(sessions.id, user.session.id));
   }
+
   return user;
+};
+
+/**
+ * Reads the session cookie of the current request and resolves it to a user.
+ * Returns `null` when there is no cookie, no matching row, or it has expired.
+ * This is the "who am I?" helper used by the auto-login-after-registration flow.
+ */
+export const getCurrentUser = async () => {
+  const cookieStore = await cookies();
+  const sessionToken = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+
+  if (!sessionToken) return null;
+
+  return validateSessionAndGetUser(sessionToken);
 };
 
 export const invalidateSession = async (id: string) => {
   await db.delete(sessions).where(eq(sessions.id, id));
+};
+
+/** Deletes the session row belonging to a raw (un-hashed) cookie token. */
+export const invalidateSessionByToken = async (token: string) => {
+  await db.delete(sessions).where(eq(sessions.id, hashSessionToken(token)));
 };

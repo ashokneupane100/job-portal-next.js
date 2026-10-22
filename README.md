@@ -119,21 +119,81 @@ Open [http://localhost:3000](http://localhost:3000).
 src/
   app/
     layout.tsx                     Root layout, fonts + <Toaster />
-    page.tsx                       Home page
+    page.tsx                       Home page — shows the logged-in user
     globals.css                    Tailwind v4 theme + shadcn CSS variables
     login/page.tsx                 Login form (React Hook Form + Zod)
     register/page.tsx              Registration form (React Hook Form + Zod)
   components/ui/                   shadcn/ui components (Radix primitives)
-  config/db.ts                     PostgreSQL connection + Drizzle instance
+  config/
+    db.ts                          PostgreSQL connection + Drizzle instance
+    constant.ts                    Session lifetime / cookie constants
   drizzle/
     schema.ts                      Table definitions (source of truth)
     migration/                     Generated SQL migrations
   features/auth/
     auth.schema.ts                 Zod validation schemas
-    server/auth.actions.tsx        Server Actions (register / login)
+    server/auth.actions.tsx        Server Actions (register / login / logout)
+    server/use-cases/sessions.ts   Create / validate / invalidate sessions
+    server/use-cases/location.ts   Client IP lookup from request headers
   lib/utils.ts                     cn() helper
 scripts/                           Maintenance scripts
 ```
+
+---
+
+## Sessions (auto-login after registration)
+
+Registering or logging in creates a row in the `sessions` table and puts the
+session token in a cookie. The home page reads that cookie back, so you are
+signed in immediately after registering.
+
+```
+browser ──POST (server action)──▶  registerUserAction
+                                       │  1. insert into users
+                                       │  2. insert into sessions   ← same transaction
+                                       │  3. set cookie "session"
+                                       ▼
+                              home page reads the cookie
+                              → getCurrentUser() → validates the token
+```
+
+**How the token is stored**
+
+| Where | What is stored |
+| --- | --- |
+| Cookie (`session`, httpOnly) | the raw random token |
+| `sessions.id` | `sha-256(token)` — the raw token is never in the database |
+
+Because the database only holds the hash, a database dump cannot be replayed
+as a login.
+
+**Reading the current user**
+
+```ts
+import { getCurrentUser } from "@/features/auth/server/use-cases/sessions";
+
+const user = await getCurrentUser(); // null when nobody is logged in
+```
+
+**PostgreSQL note — there is no `insertId`**
+
+The tutorial is written for MySQL, where Drizzle returns the generated id on
+the insert result as `insertId`. The Postgres driver has no such property —
+you have to ask for the row explicitly:
+
+```ts
+// ❌ MySQL only — `insertId` is undefined on Postgres
+const [result] = await db.insert(users).values({ ... });
+await createSessionAndSetCookies(result.insertId);
+
+// ✅ PostgreSQL — ask for the row back
+const [newUser] = await db.insert(users).values({ ... }).returning();
+await createSessionAndSetCookies(newUser.id);
+```
+
+This is the one difference that silently breaks registration on Postgres: the
+session insert gets `user_id = NULL`, the `NOT NULL` constraint rejects it,
+and the registration looks like it "did nothing".
 
 ---
 
@@ -195,6 +255,7 @@ export const users = pgTable("users", {
   email: varchar("email", { length: 255 }).notNull().unique(),
   role: roleEnum("role").default("applicant"),
   phoneNumber: varchar("phone_number", { length: 255 }),
+  avatarUrl: varchar("avatar_url", { length: 255 }),
   deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "date" }),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })

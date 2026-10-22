@@ -10,14 +10,15 @@ import {
   RegisterUserData,
   registerUserSchema,
 } from "../auth.schema";
-import { createSessionAndSetCookie } from "./use-cases/sessions";
-
+import { createSessionAndSetCookies, invalidateSessionByToken } from "./use-cases/sessions";
+import { cookies } from "next/headers";
+import { SESSION_COOKIE_NAME } from "@/config/constant";
 
 export const registerUserAction = async (data: RegisterUserData) => {
   try {
     const { data: validatedData, error } = registerUserSchema.safeParse(data);
     if (error) return { status: "ERROR", message: error.issues[0].message };
-    // console.log(formData.get("name"));
+
     const { name, userName, email, password, role } = validatedData;
 
     const [user] = await db
@@ -37,15 +38,34 @@ export const registerUserAction = async (data: RegisterUserData) => {
 
     const hashPassword = await argon2.hash(password);
 
-    await db
-      .insert(users)
-      .values({ name, userName, email, password: hashPassword, role });
+    /**
+     * The user row and the session row are written in a single transaction:
+     * a registration either creates BOTH or neither. If the session insert
+     * fails we do not want an orphaned user with no way to log in.
+     */
+    await db.transaction(async (tx) => {
+      /**
+       * PostgreSQL has no `insertId`. To read the generated `serial` id back
+       * you ask for it explicitly with `.returning()`.
+       */
+      const [newUser] = await tx
+        .insert(users)
+        .values({ name, userName, email, password: hashPassword, role })
+        .returning();
+
+      /**
+       * Auto-login after registration: create the `sessions` row and put the
+       * session token in the cookie.
+       */
+      await createSessionAndSetCookies(newUser.id, tx);
+    });
 
     return {
       status: "SUCCESS",
       message: "Registration Completed Successfully",
     };
   } catch (error) {
+    console.error("[registerUserAction] failed:", error);
     return {
       status: "ERROR",
       message: "Unknown Error Occurred! Please Try Again Later",
@@ -53,18 +73,12 @@ export const registerUserAction = async (data: RegisterUserData) => {
   }
 };
 
-// type LoginData = {
-//   email: string;
-//   password: string;
-// };
-
 export const loginUserAction = async (data: LoginUserData) => {
   try {
     const { data: validatedData, error } = loginUserSchema.safeParse(data);
     if (error) return { status: "ERROR", message: error.issues[0].message };
-    // console.log(formData.get("name"));
+
     const { email, password } = validatedData;
-    // const { email, password } = data;
 
     const [user] = await db.select().from(users).where(eq(users.email, email));
 
@@ -77,20 +91,33 @@ export const loginUserAction = async (data: LoginUserData) => {
     if (!isValidPassword)
       return { status: "ERROR", message: "Invalid Email or Password" };
 
+    // Log the user in: create the `sessions` row and set the session cookie.
+    await createSessionAndSetCookies(user.id);
+
     return {
       status: "SUCCESS",
       message: "Login Successful",
-      
     };
-  
-   await  createSessionAndSetCookie(user.id)
-
-
-
   } catch (error) {
+    console.error("[loginUserAction] failed:", error);
     return {
       status: "ERROR",
       message: "Unknown Error Occurred! Please Try Again Later",
     };
   }
+};
+
+/**
+ * Deletes the session row and clears the cookie, so the user is logged out
+ * on every device that used this session.
+ */
+export const logoutUserAction = async () => {
+  const cookieStore = await cookies();
+  const sessionToken = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+
+  if (sessionToken) {
+    await invalidateSessionByToken(sessionToken);
+  }
+
+  cookieStore.delete(SESSION_COOKIE_NAME);
 };

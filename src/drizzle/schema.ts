@@ -20,6 +20,7 @@ export const users = pgTable("users", {
   email: varchar("email", { length: 255 }).notNull().unique(),
   role: roleEnum("role").default("applicant"),
   phoneNumber: varchar("phone_number", { length: 255 }),
+  avatarUrl: varchar("avatar_url", { length: 255 }),
   deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "date" }),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .defaultNow()

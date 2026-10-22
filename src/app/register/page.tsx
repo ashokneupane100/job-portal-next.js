@@ -1,6 +1,6 @@
 "use client";
 
-import React, { ChangeEvent, FormEvent, useState } from "react";
+import React, { useState } from "react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -27,16 +27,21 @@ import {
   registerUserWithConfirmSchema,
 } from "@/features/auth/auth.schema";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
+import { useRouter } from "next/navigation";
 
 const Registration: React.FC = () => {
+  const router = useRouter();
   const {
+    control,
     register,
     handleSubmit,
-    watch,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(registerUserWithConfirmSchema),
+    defaultValues: {
+      role: "applicant",
+    },
   });
 
   const [showPassword, setShowPassword] = useState(false);
@@ -45,8 +50,15 @@ const Registration: React.FC = () => {
   const onSubmit = async (data: RegisterUserWithConfirmData) => {
     const result = await registerUserAction(data);
 
-    if (result.status === "SUCCESS") toast.success(result.message);
-    else toast.error(result.message);
+    if (result.status === "SUCCESS") {
+      toast.success(result.message);
+      // The server action already created the session row and set the
+      // session cookie, so we are logged in — go to the home page.
+      router.push("/");
+      router.refresh();
+    } else {
+      toast.error(result.message);
+    }
   };
 
   return (
@@ -120,15 +132,32 @@ const Registration: React.FC = () => {
             {/* Role Selection */}
             <div className="space-y-2 w-full">
               <Label htmlFor="role">I am a *</Label>
-              <Select {...register("role")}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select your role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="applicant">Job Applicant</SelectItem>
-                  <SelectItem value="employer">Employer</SelectItem>
-                </SelectContent>
-              </Select>
+              {/**
+               * Radix's <Select> is not a native <select>, so
+               * `{...register("role")}` never fires an onChange and the value
+               * would silently fall back to the schema default. `Controller`
+               * wires Radix's `onValueChange` to react-hook-form properly.
+               */}
+              <Controller
+                control={control}
+                name="role"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select your role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="applicant">Job Applicant</SelectItem>
+                      <SelectItem value="employer">Employer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              {errors.role && (
+                <p className="text-sm text-destructive">
+                  {errors.role.message}
+                </p>
+              )}
             </div>
 
             {/* Password Field */}
