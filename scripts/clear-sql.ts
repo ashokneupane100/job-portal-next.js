@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 // Prints the TRUNCATE statement for Drizzle Studio's SQL console and, when a
 // clipboard tool is available, copies it so you can paste it straight in.
-const sqlFile = join(process.cwd(), "drizzle", "clear-all-data.sql");
+const sqlFile = join(process.cwd(), "src", "drizzle", "clear-all-data.sql");
 const contents = readFileSync(sqlFile, "utf8");
 
 // Strip the comment lines so only the runnable statement is copied.

@@ -4,8 +4,8 @@ A job portal built with [Next.js](https://nextjs.org) (App Router),
 [Drizzle ORM](https://orm.drizzle.team) and **PostgreSQL**.
 
 > The tutorial this project follows uses MySQL. This codebase uses PostgreSQL
-> instead — see [MySQL → PostgreSQL](#mysql--postgresql-cheat-sheet) below for
-> the exact differences so you can follow along without getting stuck.
+> instead — see [MySQL → PostgreSQL cheat sheet](#mysql--postgresql-cheat-sheet)
+> below for the exact differences so you can follow along without getting stuck.
 
 ---
 
@@ -70,10 +70,10 @@ npm install
 npm run db:migrate
 ```
 
-This applies the SQL files in `drizzle/migration/` to your database, creating
-the `users` and `sessions` tables plus the `role` enum.
+This applies the SQL files in `src/drizzle/migration/` to your database,
+creating the `users` and `sessions` tables plus the `role` enum.
 
-You can also push the schema straight from `drizzle/schema.ts` without
+You can also push the schema straight from `src/drizzle/schema.ts` without
 generating a migration file:
 
 ```bash
@@ -94,7 +94,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 | Command | What it does |
 | --- | --- |
-| `npm run db:generate` | Generate a migration file from `drizzle/schema.ts` |
+| `npm run db:generate` | Generate a migration file from `src/drizzle/schema.ts` |
 | `npm run db:migrate` | Apply pending migrations to the database |
 | `npm run db:push` | Push the schema directly (no migration file) |
 | `npm run db:studio` | Start Drizzle Studio, then open `https://local.drizzle.studio` |
@@ -110,6 +110,30 @@ Open [http://localhost:3000](http://localhost:3000).
 > `https://local.drizzle.studio`. The local server itself only speaks the
 > Studio protocol, so opening `http://127.0.0.1:4983` in a browser will not
 > show the UI.
+
+---
+
+## Project structure
+
+```
+src/
+  app/
+    layout.tsx                     Root layout, fonts + <Toaster />
+    page.tsx                       Home page
+    globals.css                    Tailwind v4 theme + shadcn CSS variables
+    login/page.tsx                 Login form (React Hook Form + Zod)
+    register/page.tsx              Registration form (React Hook Form + Zod)
+  components/ui/                   shadcn/ui components (Radix primitives)
+  config/db.ts                     PostgreSQL connection + Drizzle instance
+  drizzle/
+    schema.ts                      Table definitions (source of truth)
+    migration/                     Generated SQL migrations
+  features/auth/
+    auth.schema.ts                 Zod validation schemas
+    server/auth.actions.tsx        Server Actions (register / login)
+  lib/utils.ts                     cn() helper
+scripts/                           Maintenance scripts
+```
 
 ---
 
@@ -146,13 +170,13 @@ const db = drizzle({ client });
 dialect: "postgresql", // was "mysql"
 ```
 
-### Schema (`drizzle/schema.ts`)
+### Schema (`src/drizzle/schema.ts`)
 
 | Concept | MySQL | PostgreSQL |
 | --- | --- | --- |
 | Import from | `drizzle-orm/mysql-core` | `drizzle-orm/pg-core` |
 | Auto-increment id | `int("id").autoincrement()` | `serial("id")` |
-| Enum | `mysqlEnum("role", [...])` | `pgEnum("role", [...])` |
+| Enum | `mysqlEnum("role", [...])` | `pgEnum("role", [...])` (declared once, then referenced) |
 | Text column | `text("bio")` | `text("bio")` |
 | String column | `varchar("name", { length: 255 })` | `varchar("name", { length: 255 })` |
 | Timestamps | `timestamp("created_at")` | `timestamp("created_at", { withTimezone: true, mode: "date" })` |
@@ -168,30 +192,45 @@ export const users = pgTable("users", {
   name: varchar("name", { length: 255 }).notNull(),
   userName: varchar("username", { length: 255 }).notNull().unique(),
   password: text("password").notNull(),
-  email: varchar("email", { length: 255 }).unique(),
-  role: roleEnum("role").notNull().default("applicant"),
-  phoneNumber: varchar("phone_number", { length: 18 }).notNull(),
+  email: varchar("email", { length: 255 }).notNull().unique(),
+  role: roleEnum("role").default("applicant"),
+  phoneNumber: varchar("phone_number", { length: 255 }),
+  deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "date" }),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull(),
 });
 ```
+
+> **Two PostgreSQL-only notes**
+> 1. `pgEnum` cannot be declared inline on a column like `mysqlEnum` can, so
+>    the type is created once as `roleEnum` and then referenced by name.
+> 2. MySQL's `onUpdateNow()` has no direct PostgreSQL equivalent. `$onUpdate()`
+>    is Drizzle's app-level equivalent and refreshes `updated_at` on every
+>    `update()` — the database column itself stays `timestamp with time zone`.
 
 ### Error codes
 
 | Situation | MySQL | PostgreSQL |
-| --- | --- | --- |
+| --- | --- |
 | Duplicate key | `ER_DUP_ENTRY` | `23505` (unique violation) |
 
 Drizzle wraps the driver error, so in PostgreSQL the SQLSTATE lives on
-`error.cause.code`, not on `error.code`. This project walks the `cause` chain
-in `features/auth/server/auth.actions.tsx`:
+`error.cause.code`, not on `error.code`. If you ever need to catch a unique
+violation directly, walk the `cause` chain:
 
 ```ts
-if (err.code === "23505") {
-  // "Key (username)=(x) already exists."  →  err.detail
-  // "users_username_key"                  →  err.constraint_name
+if (err.cause?.code === "23505") {
+  // "Key (username)=(x) already exists."  →  err.cause.detail
+  // "users_username_key"                  →  err.cause.constraint_name
 }
 ```
+
+> The current `registerUserAction` does not need this: it checks for an
+> existing email/username with a `SELECT` before inserting, exactly like the
+> tutorial does.
 
 ### Deleting all rows
 
@@ -215,26 +254,6 @@ TRUNCATE TABLE "public"."sessions", "public"."users" RESTART IDENTITY CASCADE;
 - **Timestamps** — PostgreSQL's `timestamptz` stores UTC and converts on read.
   MySQL's `DATETIME` has no timezone at all.
 - **Limit/offset** — same syntax: `SELECT ... LIMIT 10 OFFSET 5`.
-
----
-
-## Project structure
-
-```
-app/
-  login/page.tsx                  Login form
-  register/page.tsx               Registration form
-components/ui/                    shadcn/ui components
-config/db.ts                      PostgreSQL connection + Drizzle instance
-drizzle/
-  schema.ts                       Table definitions (source of truth)
-  migration/                      Generated SQL migrations
-features/auth/
-  auth.schema.tsx                 Zod validation schemas
-  server/auth.actions.tsx         Server Actions (register / login)
-lib/auth.ts                       Session helpers
-scripts/                          Maintenance scripts
-```
 
 ---
 
