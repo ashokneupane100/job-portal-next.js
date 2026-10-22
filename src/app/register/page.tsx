@@ -39,9 +39,10 @@ const Registration: React.FC = () => {
     formState: { errors },
   } = useForm({
     resolver: zodResolver(registerUserWithConfirmSchema),
-    defaultValues: {
-      role: "applicant",
-    },
+    // No `defaultValues.role` on purpose: leaving it undefined keeps the
+    // <Select> uncontrolled so Radix shows the "Select your role" placeholder.
+    // If the user never picks one, the Zod schema's `.default("applicant")`
+    // fills it in on submit.
   });
 
   const [showPassword, setShowPassword] = useState(false);
@@ -130,21 +131,29 @@ const Registration: React.FC = () => {
             </div>
 
             {/* Role Selection */}
-            <div className="space-y-2 w-full">
+            <div className="space-y-2 w-full bg-amber-50">
               <Label htmlFor="role">I am a *</Label>
               {/**
                * Radix's <Select> is not a native <select>, so
                * `{...register("role")}` never fires an onChange and the value
                * would silently fall back to the schema default. `Controller`
                * wires Radix's `onValueChange` to react-hook-form properly.
+               *
+               * `field.value ?? ""` keeps the Select *controlled* for its whole
+               * life (no uncontrolled -> controlled React warning) while still
+               * showing the placeholder, because Radix treats an empty string
+               * as "nothing selected".
                */}
               <Controller
                 control={control}
                 name="role"
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <Select
+                    value={field.value ?? ""}
+                    onValueChange={field.onChange}
+                  >
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select your role" />
+                      <SelectValue placeholder="Select your role 👇" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="applicant">Job Applicant</SelectItem>
