@@ -63,6 +63,12 @@ export const registerUserSchema = z.object({
 // z.infer automatically creates a TypeScript type from your Zod schema.
 export type RegisterUserData = z.infer<typeof registerUserSchema>;
 
+// The *input* type is what the form collects, the *output* type is what comes
+// back after Zod has cleaned it up (trimmed, lowercased, defaults applied).
+// React Hook Form needs both, because `zodResolver` transforms the values
+// between them.
+export type RegisterUserInput = z.input<typeof registerUserSchema>;
+
 // Optional: Create a schema with password confirmation - in server we don't need confPass.
 export const registerUserWithConfirmSchema = registerUserSchema
   .extend({
@@ -74,6 +80,10 @@ export const registerUserWithConfirmSchema = registerUserSchema
   });
 
 export type RegisterUserWithConfirmData = z.infer<
+  typeof registerUserWithConfirmSchema
+>;
+
+export type RegisterUserWithConfirmInput = z.input<
   typeof registerUserWithConfirmSchema
 >;
 

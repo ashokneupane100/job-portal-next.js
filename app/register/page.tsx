@@ -1,7 +1,8 @@
 "use client";
 
-import React, { ChangeEvent, FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -21,104 +22,103 @@ import { Eye, EyeOff, Lock, Mail, Phone, User, UserCheck } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
+import { registerUserAction } from "@/features/auth/server/auth.actions";
 import {
   registerUserWithConfirmSchema,
-  toFieldErrors,
+  type RegisterUserWithConfirmData,
+  type RegisterUserWithConfirmInput,
 } from "@/features/auth/auth.schema";
-import { registerUserAction } from "@/features/auth/server/auth.actions";
 
-// The state has exactly the shape the Zod schema expects, so the same schema
-// can validate it here in the browser and again inside the Server Action.
-interface RegistrationFormData {
-  name: string;
-  userName: string;
-  email: string;
-  phoneNumber: string;
-  password: string;
-  confirmPassword: string;
-  role: "applicant" | "employer";
-}
+/** The names of the inputs on this form — used to route server errors back. */
+type RegisterFieldName =
+  | "name"
+  | "userName"
+  | "email"
+  | "phoneNumber"
+  | "password"
+  | "confirmPassword"
+  | "role";
+
+const REGISTER_FIELD_NAMES: RegisterFieldName[] = [
+  "name",
+  "userName",
+  "email",
+  "phoneNumber",
+  "password",
+  "confirmPassword",
+  "role",
+];
 
 const Registration: React.FC = () => {
   const router = useRouter();
-  const [formData, setFormData] = useState<RegistrationFormData>({
-    name: "",
-    userName: "",
-    email: "",
-    phoneNumber: "",
-    password: "",
-    confirmPassword: "",
-    role: "applicant",
-  });
-
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<
-    Partial<Record<string, string>>
-  >({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleInputChange = (name: string, value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-    setFieldErrors((prev) => ({ ...prev, [name]: undefined }));
-    if (error) setError(null);
-  };
+  // 👉 `useForm` is the brain of the form. `zodResolver` plugs the Zod schema
+  // in as the validator, so `handleSubmit` runs it before the Server Action is
+  // ever called — the browser catches bad input before it reaches the server.
+  const form = useForm<
+    RegisterUserWithConfirmInput,
+    unknown,
+    RegisterUserWithConfirmData
+  >({
+    resolver: zodResolver(registerUserWithConfirmSchema),
+    defaultValues: {
+      name: "",
+      userName: "",
+      email: "",
+      phoneNumber: "",
+      password: "",
+      confirmPassword: "",
+      role: "applicant",
+    },
+  });
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setFieldErrors({});
+  const {
+    register,
+    handleSubmit,
+    control,
+    setError,
+    formState: { errors, isSubmitting },
+  } = form;
 
-    // 👉 Validate with the very same schema the Server Action uses.
-    const parsed = registerUserWithConfirmSchema.safeParse(formData);
+  const onSubmit = async (data: RegisterUserWithConfirmData) => {
+    // The confirmation field is only for the browser. The Server Action has no
+    // idea it exists, so it never gets sent.
+    const { confirmPassword: _confirmPassword, ...payload } = data;
 
-    if (!parsed.success) {
-      const message = parsed.error.issues[0].message;
-      setFieldErrors(toFieldErrors(parsed.error));
-      setError(message);
-      toast.error("Check your details", { description: message });
-      return;
-    }
-
-    setIsSubmitting(true);
     try {
-      // The server never needs the confirmation field.
-      const payload = {
-        name: parsed.data.name,
-        userName: parsed.data.userName,
-        email: parsed.data.email,
-        phoneNumber: parsed.data.phoneNumber,
-        password: parsed.data.password,
-        role: parsed.data.role,
-      };
-
       const result = await registerUserAction(payload);
 
-      if (result.status === "ERROR") {
-        setError(result.message);
-        if (result.fieldErrors) setFieldErrors(result.fieldErrors);
-        toast.error("Registration failed", { description: result.message });
+      if (result.status === "SUCCESS") {
+        toast.success(result.message);
+        // A session was created, so send the new user to the home page.
+        router.push("/");
+        router.refresh();
         return;
       }
 
-      toast.success("Account created successfully!", {
-        description: "Welcome to Job Sewa Nepal.",
-      });
+      toast.error(result.message);
 
-      router.push("/");
-      router.refresh();
+      // The server can still reject a value that looked fine in the browser
+      // (a username that is already taken, for example). Push those messages
+      // back onto the exact inputs that caused them.
+      if (result.fieldErrors) {
+        for (const [field, message] of Object.entries(result.fieldErrors)) {
+          // Ignore anything that is not actually an input on this form.
+          if (!REGISTER_FIELD_NAMES.includes(field as RegisterFieldName)) continue;
+
+          setError(field as RegisterFieldName, {
+            type: "server",
+            message,
+          });
+        }
+      }
     } catch {
-      const message = "Registration failed. Please try again.";
-      setError(message);
-      toast.error("Registration failed", { description: message });
-    } finally {
-      setIsSubmitting(false);
+      toast.error("Registration failed. Please try again.");
     }
   };
 
@@ -134,7 +134,7 @@ const Registration: React.FC = () => {
         </CardHeader>
 
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             {/* Name Field */}
             <div className="space-y-2">
               <Label htmlFor="name">Full Name *</Label>
@@ -142,22 +142,17 @@ const Registration: React.FC = () => {
                 <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   id="name"
-                  name="name"
                   type="text"
                   autoComplete="name"
                   placeholder="Enter your full name"
-                  required
-                  value={formData.name}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                    handleInputChange("name", e.target.value)
-                  }
-                  aria-invalid={!!fieldErrors.name}
-                  className={`pl-10 `}
+                  aria-invalid={!!errors.name}
+                  className={`pl-10 ${errors.name ? "border-destructive" : ""}`}
+                  {...register("name")}
                 />
               </div>
-              {fieldErrors.name && (
+              {errors.name && (
                 <p className="text-sm text-destructive" role="alert">
-                  {fieldErrors.name}
+                  {errors.name.message}
                 </p>
               )}
             </div>
@@ -169,22 +164,17 @@ const Registration: React.FC = () => {
                 <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   id="userName"
-                  name="userName"
                   type="text"
                   autoComplete="username"
                   placeholder="Choose a username"
-                  required
-                  value={formData.userName}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                    handleInputChange("userName", e.target.value)
-                  }
-                  aria-invalid={!!fieldErrors.userName}
-                  className={`pl-10 `}
+                  aria-invalid={!!errors.userName}
+                  className={`pl-10 ${errors.userName ? "border-destructive" : ""}`}
+                  {...register("userName")}
                 />
               </div>
-              {fieldErrors.userName && (
+              {errors.userName && (
                 <p className="text-sm text-destructive" role="alert">
-                  {fieldErrors.userName}
+                  {errors.userName.message}
                 </p>
               )}
             </div>
@@ -196,22 +186,17 @@ const Registration: React.FC = () => {
                 <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   id="email"
-                  name="email"
                   type="email"
                   autoComplete="email"
                   placeholder="Enter your email"
-                  required
-                  value={formData.email}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                    handleInputChange("email", e.target.value)
-                  }
-                  aria-invalid={!!fieldErrors.email}
-                  className={`pl-10 `}
+                  aria-invalid={!!errors.email}
+                  className={`pl-10 ${errors.email ? "border-destructive" : ""}`}
+                  {...register("email")}
                 />
               </div>
-              {fieldErrors.email && (
+              {errors.email && (
                 <p className="text-sm text-destructive" role="alert">
-                  {fieldErrors.email}
+                  {errors.email.message}
                 </p>
               )}
             </div>
@@ -223,23 +208,18 @@ const Registration: React.FC = () => {
                 <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   id="phoneNumber"
-                  name="phoneNumber"
                   type="tel"
                   autoComplete="tel"
                   placeholder="Enter your phone number"
                   maxLength={18}
-                  required
-                  value={formData.phoneNumber}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                    handleInputChange("phoneNumber", e.target.value)
-                  }
-                  aria-invalid={!!fieldErrors.phoneNumber}
-                  className={`pl-10 `}
+                  aria-invalid={!!errors.phoneNumber}
+                  className={`pl-10 ${errors.phoneNumber ? "border-destructive" : ""}`}
+                  {...register("phoneNumber")}
                 />
               </div>
-              {fieldErrors.phoneNumber && (
+              {errors.phoneNumber && (
                 <p className="text-sm text-destructive" role="alert">
-                  {fieldErrors.phoneNumber}
+                  {errors.phoneNumber.message}
                 </p>
               )}
             </div>
@@ -247,26 +227,38 @@ const Registration: React.FC = () => {
             {/* Role Selection */}
             <div className="space-y-2 w-full">
               <Label htmlFor="role">I am a *</Label>
-              <Select
+              {/*
+                👉 A `<Select>` is a controlled component, so `register` cannot
+                attach to it. `Controller` is the bridge: it keeps the value in
+                the form state and pushes it back down on every change.
+              */}
+              <Controller
+                control={control}
                 name="role"
-                value={formData.role}
-                onValueChange={(value) => {
-                  if (value === "applicant" || value === "employer") {
-                    handleInputChange("role", value);
-                  }
-                }}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select your role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="applicant">Job Applicant</SelectItem>
-                  <SelectItem value="employer">Employer</SelectItem>
-                </SelectContent>
-              </Select>
-              {fieldErrors.role && (
+                render={({ field }) => (
+                  <Select
+                    value={field.value ?? "applicant"}
+                    onValueChange={(value) =>
+                      field.onChange(value ?? "applicant")
+                    }
+                  >
+                    <SelectTrigger
+                      id="role"
+                      className="w-full"
+                      aria-invalid={!!errors.role}
+                    >
+                      <SelectValue placeholder="Select your role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="applicant">Job Applicant</SelectItem>
+                      <SelectItem value="employer">Employer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              {errors.role && (
                 <p className="text-sm text-destructive" role="alert">
-                  {fieldErrors.role}
+                  {errors.role.message}
                 </p>
               )}
             </div>
@@ -278,17 +270,12 @@ const Registration: React.FC = () => {
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   id="password"
-                  name="password"
                   type={showPassword ? "text" : "password"}
                   autoComplete="new-password"
                   placeholder="Create a strong password"
-                  required
-                  value={formData.password}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                    handleInputChange("password", e.target.value)
-                  }
-                  aria-invalid={!!fieldErrors.password}
-                  className={`pl-10 pr-10 `}
+                  aria-invalid={!!errors.password}
+                  className={`pl-10 pr-10 ${errors.password ? "border-destructive" : ""}`}
+                  {...register("password")}
                 />
 
                 <Button
@@ -296,7 +283,7 @@ const Registration: React.FC = () => {
                   variant="ghost"
                   size="sm"
                   className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                  onClick={() => setShowPassword(!showPassword)}
+                  onClick={() => setShowPassword((prev) => !prev)}
                   aria-label="Toggle password visibility"
                 >
                   {showPassword ? (
@@ -306,9 +293,9 @@ const Registration: React.FC = () => {
                   )}
                 </Button>
               </div>
-              {fieldErrors.password && (
+              {errors.password && (
                 <p className="text-sm text-destructive" role="alert">
-                  {fieldErrors.password}
+                  {errors.password.message}
                 </p>
               )}
             </div>
@@ -320,25 +307,21 @@ const Registration: React.FC = () => {
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   id="confirmPassword"
-                  name="confirmPassword"
                   type={showConfirmPassword ? "text" : "password"}
                   autoComplete="new-password"
                   placeholder="Confirm your password"
-                  required
-                  value={formData.confirmPassword}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                    handleInputChange("confirmPassword", e.target.value)
-                  }
-                  aria-invalid={!!fieldErrors.confirmPassword}
-                  className={`pl-10 pr-10 `}
+                  aria-invalid={!!errors.confirmPassword}
+                  className={`pl-10 pr-10 ${errors.confirmPassword ? "border-destructive" : ""}`}
+                  {...register("confirmPassword")}
                 />
+
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  aria-label="Toggle password visibility"
+                  onClick={() => setShowConfirmPassword((prev) => !prev)}
+                  aria-label="Toggle confirm password visibility"
                 >
                   {showConfirmPassword ? (
                     <EyeOff className="w-4 h-4 text-muted-foreground" />
@@ -347,9 +330,9 @@ const Registration: React.FC = () => {
                   )}
                 </Button>
               </div>
-              {fieldErrors.confirmPassword && (
+              {errors.confirmPassword && (
                 <p className="text-sm text-destructive" role="alert">
-                  {fieldErrors.confirmPassword}
+                  {errors.confirmPassword.message}
                 </p>
               )}
             </div>
@@ -358,12 +341,6 @@ const Registration: React.FC = () => {
             <Button type="submit" className="w-full" disabled={isSubmitting}>
               {isSubmitting ? "Creating Account..." : "Create Account"}
             </Button>
-
-            {error && (
-              <p className="text-sm text-destructive text-center" role="alert">
-                {error}
-              </p>
-            )}
 
             <div className="text-center">
               <p className="text-sm text-muted-foreground">

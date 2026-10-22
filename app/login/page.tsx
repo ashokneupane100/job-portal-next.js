@@ -1,7 +1,8 @@
 "use client";
 
-import React, { ChangeEvent, FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Input } from "@/components/ui/input";
 import {
   Card,
@@ -14,72 +15,44 @@ import { Eye, EyeOff, Lock, Mail, UserCheck } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { toast } from "sonner";
-
-import { loginUserSchema } from "@/features/auth/auth.schema";
+import { useRouter } from "next/navigation";
 import { loginUserAction } from "@/features/auth/server/auth.actions";
-
-interface LoginFormData {
-  email: string;
-  password: string;
-}
+import { toast } from "sonner";
+import { LoginUserData, loginUserSchema } from "@/features/auth/auth.schema";
 
 const LoginForm: React.FC = () => {
   const router = useRouter();
-  const [formData, setFormData] = useState<LoginFormData>({
-    email: "",
-    password: "",
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginUserData>({
+    resolver: zodResolver(loginUserSchema),
+    defaultValues: {
+      email: "",
+      password: "",
+    },
   });
 
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleInputChange = (name: string, value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-    if (error) setError(null);
-  };
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setError(null);
-
-    // 👉 Validate with the same Zod schema the Server Action uses, so the user
-    // gets instant feedback without a round trip to the server.
-    const parsed = loginUserSchema.safeParse(formData);
-
-    if (!parsed.success) {
-      const message = parsed.error.issues[0].message;
-      setError(message);
-      toast.error("Sign in failed", { description: message });
-      return;
-    }
-
-    setIsSubmitting(true);
+  const onSubmit = async (data: LoginUserData) => {
     try {
-      const result = await loginUserAction(parsed.data);
+      const result = await loginUserAction(data);
 
-      if (result.status === "ERROR") {
-        setError(result.message);
-        toast.error("Sign in failed", { description: result.message });
+      if (result.status === "SUCCESS") {
+        toast.success(result.message);
+        // The Server Action set the session cookie, so send the user to the
+        // home page. `refresh()` makes the server re-render with that cookie.
+        router.push("/");
+        router.refresh();
         return;
       }
 
-      toast.success("Welcome To Job Sewa Nepal!", {
-        description: "You have signed in successfully.",
-      });
-
-      router.push("/");
-      router.refresh();
+      toast.error(result.message);
     } catch {
-      const message = "Login failed. Please try again.";
-      setError(message);
-      toast.error("Sign in failed", { description: message });
-    } finally {
-      setIsSubmitting(false);
+      toast.error("Something went wrong. Please try again.");
     }
   };
 
@@ -91,49 +64,44 @@ const LoginForm: React.FC = () => {
             <UserCheck className="w-8 h-8 text-primary-foreground" />
           </div>
           <CardTitle className="text-2xl">Welcome Back</CardTitle>
-          <CardDescription>Sign in to access your account</CardDescription>
+          <CardDescription>Sign in to continue to your Job Portal account</CardDescription>
         </CardHeader>
 
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Email Field */}
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="email">Email Address *</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   id="email"
-                  name="email"
                   type="email"
                   autoComplete="email"
                   placeholder="Enter your email"
-                  required
-                  value={formData.email}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                    handleInputChange("email", e.target.value)
-                  }
-                  className={`pl-10 `}
+                  aria-invalid={!!errors.email}
+                  {...register("email")}
+                  className={`pl-10 ${errors.email ? "border-destructive" : ""}`}
                 />
               </div>
+              {errors.email && (
+                <p className="text-sm text-destructive" role="alert">
+                  {errors.email.message}
+                </p>
+              )}
             </div>
 
-            {/* Password Field */}
             <div className="space-y-2">
               <Label htmlFor="password">Password *</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   id="password"
-                  name="password"
                   type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
                   placeholder="Enter your password"
-                  required
-                  value={formData.password}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                    handleInputChange("password", e.target.value)
-                  }
-                  className={`pl-10 pr-10 `}
+                  aria-invalid={!!errors.password}
+                  {...register("password")}
+                  className={`pl-10 pr-10 ${errors.password ? "border-destructive" : ""}`}
                 />
 
                 <Button
@@ -141,7 +109,7 @@ const LoginForm: React.FC = () => {
                   variant="ghost"
                   size="sm"
                   className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                  onClick={() => setShowPassword(!showPassword)}
+                  onClick={() => setShowPassword((prev) => !prev)}
                   aria-label="Toggle password visibility"
                 >
                   {showPassword ? (
@@ -151,18 +119,16 @@ const LoginForm: React.FC = () => {
                   )}
                 </Button>
               </div>
+              {errors.password && (
+                <p className="text-sm text-destructive" role="alert">
+                  {errors.password.message}
+                </p>
+              )}
             </div>
 
-            {/* Submit Button */}
             <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? "Signing in..." : "Login"}
+              {isSubmitting ? "Signing In..." : "Sign In"}
             </Button>
-
-            {error && (
-              <p className="text-sm text-destructive text-center" role="alert">
-                {error}
-              </p>
-            )}
 
             <div className="text-center">
               <p className="text-sm text-muted-foreground">
@@ -171,7 +137,7 @@ const LoginForm: React.FC = () => {
                   href="/register"
                   className="text-primary hover:text-primary/80 font-medium underline-offset-4 hover:underline"
                 >
-                  Register here
+                  Create one here
                 </Link>
               </p>
             </div>

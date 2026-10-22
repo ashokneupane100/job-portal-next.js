@@ -60,7 +60,15 @@ async function getRequestMeta() {
 
 /**
  * Digs the offending column out of a unique-constraint error so the form can
- * point at the right input. Postgres uses SQLSTATE 23505 for unique violations.
+ * point at the right input.
+ *
+ * Postgres reports a unique violation as SQLSTATE `23505`. Drizzle wraps the
+ * driver error in a `DrizzleQueryError`, so the code lives on `error.cause`
+ * rather than on the error itself — hence the walk down the `cause` chain.
+ *
+ * The offending column shows up in the driver's `detail` message
+ * ("Key (username)=(x) already exists.") and in `constraint_name`
+ * ("users_username_key").
  */
 function getDuplicateField(error: unknown): "email" | "userName" | null {
   let current: unknown = error;
@@ -73,16 +81,14 @@ function getDuplicateField(error: unknown): "email" | "userName" | null {
         constraint?: string;
         constraint_name?: string;
         message?: string;
-        sqlMessage?: string;
       };
 
-      if (err.code === "23505" || err.code === "ER_DUP_ENTRY") {
+      if (err.code === "23505") {
         const text = [
           err.detail,
           err.constraint,
           err.constraint_name,
           err.message,
-          err.sqlMessage,
         ]
           .filter(Boolean)
           .join(" ")
