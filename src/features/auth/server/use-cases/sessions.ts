@@ -22,11 +22,7 @@ const generateSessionToken = () => {
   return crypto.randomBytes(32).toString("hex").normalize();
 };
 
-/**
- * Only the SHA-256 hash of the token is stored in the database, so a leaked
- * database dump cannot be replayed as a login. The raw token only ever lives
- * in the user's cookie.
- */
+
 const hashSessionToken = (token: string) =>
   crypto.createHash("sha-256").update(token).digest("hex");
 
@@ -39,9 +35,7 @@ const createUserSession = async ({
 }: CreateSessionData) => {
   const hashedToken = hashSessionToken(token);
 
-  // `.returning()` gives us the row that was just written. Without it
-  // PostgreSQL has nothing to hand back (this is the `insertId` API from
-  // MySQL — it does not exist in the Postgres driver).
+ 
   const [session] = await tx
     .insert(sessions)
     .values({
@@ -123,8 +117,6 @@ export const validateSessionAndGetUser = async (session: string) => {
     return null;
   }
 
-  // 3: the session is close to expiring — slide the window forward so an
-  // active user is never logged out mid-session.
   if (
     Date.now() >=
     user.session.expiresAt.getTime() - SESSION_REFRESH_TIME * 1000
@@ -140,23 +132,11 @@ export const validateSessionAndGetUser = async (session: string) => {
   return user;
 };
 
-/**
- * Reads the session cookie of the current request and resolves it to a user.
- * Returns `null` when there is no cookie, no matching row, or it has expired.
- * This is the "who am I?" helper used by the auto-login-after-registration flow.
- */
-export const getCurrentUser = async () => {
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get(SESSION_COOKIE_NAME)?.value;
-
-  if (!sessionToken) return null;
-
-  return validateSessionAndGetUser(sessionToken);
-};
 
 export const invalidateSession = async (id: string) => {
   await db.delete(sessions).where(eq(sessions.id, id));
 };
+
 
 /** Deletes the session row belonging to a raw (un-hashed) cookie token. */
 export const invalidateSessionByToken = async (token: string) => {

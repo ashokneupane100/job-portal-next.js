@@ -10,9 +10,7 @@ import {
   RegisterUserData,
   registerUserSchema,
 } from "../auth.schema";
-import { createSessionAndSetCookies, invalidateSessionByToken } from "./use-cases/sessions";
-import { cookies } from "next/headers";
-import { SESSION_COOKIE_NAME } from "@/config/constant";
+import { createSessionAndSetCookies } from "./use-cases/sessions";
 
 export const registerUserAction = async (data: RegisterUserData) => {
   try {
@@ -38,25 +36,12 @@ export const registerUserAction = async (data: RegisterUserData) => {
 
     const hashPassword = await argon2.hash(password);
 
-    /**
-     * The user row and the session row are written in a single transaction:
-     * a registration either creates BOTH or neither. If the session insert
-     * fails we do not want an orphaned user with no way to log in.
-     */
     await db.transaction(async (tx) => {
-      /**
-       * PostgreSQL has no `insertId`. To read the generated `serial` id back
-       * you ask for it explicitly with `.returning()`.
-       */
       const [newUser] = await tx
         .insert(users)
         .values({ name, userName, email, password: hashPassword, role })
         .returning();
 
-      /**
-       * Auto-login after registration: create the `sessions` row and put the
-       * session token in the cookie.
-       */
       await createSessionAndSetCookies(newUser.id, tx);
     });
 
@@ -105,19 +90,4 @@ export const loginUserAction = async (data: LoginUserData) => {
       message: "Unknown Error Occurred! Please Try Again Later",
     };
   }
-};
-
-/**
- * Deletes the session row and clears the cookie, so the user is logged out
- * on every device that used this session.
- */
-export const logoutUserAction = async () => {
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get(SESSION_COOKIE_NAME)?.value;
-
-  if (sessionToken) {
-    await invalidateSessionByToken(sessionToken);
-  }
-
-  cookieStore.delete(SESSION_COOKIE_NAME);
 };
